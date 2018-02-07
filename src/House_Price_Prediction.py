@@ -80,7 +80,7 @@ optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(tf_cost)
 init = tf.global_variables_initializer()
 
 
-def plot_result(session):
+def plot_result(session, fit_size_factor, fit_price_offsets, fit_plot_idx):
     train_house_size_mean = train_house_size.mean()
     train_house_size_std = train_house_size.std()
 
@@ -100,6 +100,31 @@ def plot_result(session):
     plt.legend(loc="upper left")
     plt.show()
 
+    fig, ax = plt.subplots()
+    line, = ax.plot(house_size, house_price)
+
+    plt.rcParams["figure.figsize"]=(10,8)
+    plt.title("Gradient Descent fitting regression line")
+    plt.ylabel("Price")
+    plt.xlabel("Size (sq.ft)")
+    plt.plot(train_house_size, train_price, 'go', label="Training data")
+    plt.plot(test_house_size, test_house_price, 'mo', label="Testing data")
+
+    def animate(i):
+        line.set_xdata(train_house_size_norm * train_house_size_std + train_house_size_mean)
+        line.set_ydata((fit_size_factor[i] * train_house_size_norm + fit_price_offsets[i])
+                       * train_price_std + train_price_mean)
+        return line,
+
+    def initAnim():
+        line.set_ydata(np.zeros(shape=house_price.shape[0]))
+        return line,
+
+    ani = animation.FuncAnimation(fig, animate, frames=np.arange(0, fit_plot_idx),
+                                  init_func=initAnim, interval=1000, blit=True)
+
+    plt.show()
+
 
 def train():
     # launch the graph in the session
@@ -109,6 +134,12 @@ def train():
         display_every = 2
         num_training_iter = 50
 
+        # number of plots in the animation
+        fit_num_plots = math.floor(num_training_iter/display_every)
+        # storage of factor and offset values
+        fit_size_factor = np.zeros(fit_num_plots)
+        fit_price_offsets = np.zeros(fit_num_plots)
+        fit_plot_idx = 0
 
         # do the following 50 times
         for iteration in range(num_training_iter):
@@ -123,11 +154,14 @@ def train():
                 print("iteration #: ", '%04d' % (iteration + 1), "cost=", "{:.9f}".format(c),
                       "size_factor=", sess.run(tf_size_factor), "price_offset=", sess.run(tf_price_offset))
 
+                fit_size_factor[fit_plot_idx] = sess.run(tf_size_factor)
+                fit_price_offsets[fit_plot_idx] = sess.run(tf_price_offset)
+                fit_plot_idx += 1
         print("Optimisation finished")
         training_cost = sess.run(tf_cost, feed_dict={tf_house_size: train_house_size_norm, tf_price: train_price_norm})
         print("Training cost=", training_cost, "size_factor=", sess.run(tf_size_factor), "price_offset=",
               sess.run(tf_price_offset))
-        plot_result(sess)
+        plot_result(sess, fit_size_factor, fit_price_offsets, fit_plot_idx)
 
 
 train()
